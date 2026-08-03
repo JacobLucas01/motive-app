@@ -7,6 +7,7 @@ struct MotiveApp: App {
     @UIApplicationDelegateAdaptor(MotiveAppDelegate.self) private var appDelegate
     #endif
 
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var appState = MotiveAppState()
 
     init() {
@@ -19,6 +20,12 @@ struct MotiveApp: App {
                 .environmentObject(appState)
                 .task {
                     await appState.bootstrap()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    guard newPhase == .background else { return }
+                    Task {
+                        await appState.persistCurrentSettingsIfPossible()
+                    }
                 }
         }
     }

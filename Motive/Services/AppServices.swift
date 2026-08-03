@@ -12,6 +12,7 @@ import UIKit
 #endif
 
 protocol AuthServicing {
+    func currentUser() async -> MotiveUser?
     func signInWithApple(result: Result<ASAuthorization, Error>, rawNonce: String?) async throws -> MotiveUser
     func signOut() async
 }
@@ -88,6 +89,16 @@ struct AppServices {
 
 #if canImport(FirebaseAuth) && canImport(FirebaseAuthInternal) && canImport(FirebaseCoreExtension) && canImport(GTMSessionFetcherCore)
 struct FirebaseAppleAuthService: AuthServicing {
+    func currentUser() async -> MotiveUser? {
+        guard let firebaseUser = Auth.auth().currentUser else { return nil }
+        return MotiveUser(
+            id: firebaseUser.uid,
+            displayName: firebaseUser.displayName ?? "Motive User",
+            email: firebaseUser.email,
+            createdAt: firebaseUser.metadata.creationDate
+        )
+    }
+
     func signInWithApple(result: Result<ASAuthorization, Error>, rawNonce: String?) async throws -> MotiveUser {
         let authorization = try result.get()
         guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
@@ -143,6 +154,10 @@ enum FirebaseAppleAuthError: LocalizedError {
 #endif
 
 struct MockAuthService: AuthServicing {
+    func currentUser() async -> MotiveUser? {
+        nil
+    }
+
     func signInWithApple(result: Result<ASAuthorization, Error>, rawNonce: String?) async throws -> MotiveUser {
         switch result {
         case .success(let authorization):

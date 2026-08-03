@@ -40,6 +40,11 @@ final class MotiveAppState: ObservableObject {
         async let offer = services.subscription.loadPremiumOffer()
         subscriptionState = await state
         premiumOffer = await offer
+
+        guard let restoredUser = await services.auth.currentUser() else { return }
+        await runTask {
+            try await loadSession(for: restoredUser)
+        }
     }
 
     func loadPremiumOffer() async {
@@ -66,19 +71,7 @@ final class MotiveAppState: ObservableObject {
         await runTask {
             let signedInUser = try await services.auth.signInWithApple(result: result, rawNonce: currentAppleNonce)
             currentAppleNonce = nil
-            user = signedInUser
-            if let savedPreference = try await services.profile.loadNotificationPreference(for: signedInUser.id) {
-                notificationPreference = savedPreference
-            }
-            if let savedProfile = try await services.profile.loadProfile(for: signedInUser.id) {
-                profile = savedProfile
-                try await loadDeliveredQuote()
-                try await uploadLatestAPNsTokenIfPossible()
-                route = notificationPreference.isEnabled ? .home : .notifications
-            } else {
-                try await uploadLatestAPNsTokenIfPossible()
-                route = .onboarding
-            }
+            try await loadSession(for: signedInUser)
         }
     }
 
@@ -102,11 +95,18 @@ final class MotiveAppState: ObservableObject {
     func saveSettingsAndReturnHome() async {
         guard let user else { return }
         await runTask {
-            notificationPreference.timezoneIdentifier = TimeZone.current.identifier
-            try await services.profile.saveProfile(profile, for: user.id)
-            try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
+            try await persistSettings(for: user)
             try await uploadLatestAPNsTokenIfPossible()
             route = .home
+        }
+    }
+
+    func persistCurrentSettingsIfPossible() async {
+        guard let user else { return }
+        do {
+            try await persistSettings(for: user)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -213,6 +213,28 @@ final class MotiveAppState: ObservableObject {
         notificationPreference = NotificationPreference()
         subscriptionState = .unknown
         route = .signIn
+    }
+
+    private func loadSession(for signedInUser: MotiveUser) async throws {
+        user = signedInUser
+        if let savedPreference = try await services.profile.loadNotificationPreference(for: signedInUser.id) {
+            notificationPreference = savedPreference
+        }
+        if let savedProfile = try await services.profile.loadProfile(for: signedInUser.id) {
+            profile = savedProfile
+            try await loadDeliveredQuote()
+            try await uploadLatestAPNsTokenIfPossible()
+            route = notificationPreference.isEnabled ? .home : .notifications
+        } else {
+            try await uploadLatestAPNsTokenIfPossible()
+            route = .onboarding
+        }
+    }
+
+    private func persistSettings(for user: MotiveUser) async throws {
+        notificationPreference.timezoneIdentifier = TimeZone.current.identifier
+        try await services.profile.saveProfile(profile, for: user.id)
+        try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
     }
 
     private func observeAPNsRegistration() {

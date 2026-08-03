@@ -93,17 +93,17 @@ struct HomeView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-//            if appState.canSendStagingPush {
-//                MotivePrimaryButton(
-//                    title: appState.isWorking ? "Sending..." : "Send test push",
-//                    systemImage: "bell.badge",
-//                    isDisabled: appState.isWorking
-//                ) {
-//                    Task {
-//                        await appState.sendStagingTestPush()
-//                    }
-//                }
-//            }
+            if appState.canSendStagingPush {
+                MotivePrimaryButton(
+                    title: appState.isWorking ? "Sending..." : "Send test push",
+                    systemImage: "bell.badge",
+                    isDisabled: appState.isWorking
+                ) {
+                    Task {
+                        await appState.sendStagingTestPush()
+                    }
+                }
+            }
 
             if appState.subscriptionState == .free {
                 MotiveSecondaryButton(title: "View premium", systemImage: "crown") {
