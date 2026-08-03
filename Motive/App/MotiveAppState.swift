@@ -228,7 +228,8 @@ final class MotiveAppState: ObservableObject {
 
     private func loadSession(for signedInUser: MotiveUser) async throws {
         user = signedInUser
-        if let cached = profileCache.load(for: signedInUser.id) {
+        let cached = profileCache.load(for: signedInUser.id)
+        if let cached {
             profile = cached.profile
             notificationPreference = cached.notificationPreference
         }
@@ -236,7 +237,8 @@ final class MotiveAppState: ObservableObject {
             notificationPreference = savedPreference
         }
         if let savedProfile = try await services.profile.loadProfile(for: signedInUser.id) {
-            profile = savedProfile
+            profile = mergedProfile(serverProfile: savedProfile, cachedProfile: cached?.profile)
+            profileCache.save(profile: profile, notificationPreference: notificationPreference, for: signedInUser.id)
             try await loadDeliveredQuote()
             try await uploadLatestAPNsTokenIfPossible()
             route = notificationPreference.isEnabled ? .home : .notifications
@@ -251,6 +253,16 @@ final class MotiveAppState: ObservableObject {
         profileCache.save(profile: profile, notificationPreference: notificationPreference, for: user.id)
         try await services.profile.saveProfile(profile, for: user.id)
         try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
+    }
+
+    private func mergedProfile(serverProfile: UserProfile, cachedProfile: UserProfile?) -> UserProfile {
+        var merged = serverProfile
+        if merged.preferredName.trimmed.isEmpty,
+           let cachedName = cachedProfile?.preferredName.trimmed,
+           !cachedName.isEmpty {
+            merged.preferredName = cachedName
+        }
+        return merged
     }
 
     private func observeAPNsRegistration() {
@@ -328,22 +340,36 @@ private struct UserDefaultsProfileCache {
     private let decoder = JSONDecoder()
 
     func load(for userID: String) -> CachedUserSettings? {
-        guard let data = defaults.data(forKey: key(for: userID)) else { return nil }
-        return try? decoder.decode(CachedUserSettings.self, from: data)
+        guard let data = defaults.data(forKey: key(for: userID)),
+              var cached = try? decoder.decode(CachedUserSettings.self, from: data) else {
+            return nil
+        }
+
+        let storedName = defaults.string(forKey: nameKey(for: userID))?.trimmed ?? ""
+        if !storedName.isEmpty {
+            cached.profile.preferredName = storedName
+        }
+        return cached
     }
 
     func save(profile: UserProfile, notificationPreference: NotificationPreference, for userID: String) {
         let cached = CachedUserSettings(profile: profile, notificationPreference: notificationPreference)
         guard let data = try? encoder.encode(cached) else { return }
         defaults.set(data, forKey: key(for: userID))
+        defaults.set(profile.preferredName, forKey: nameKey(for: userID))
     }
 
     func clear(for userID: String) {
         defaults.removeObject(forKey: key(for: userID))
+        defaults.removeObject(forKey: nameKey(for: userID))
     }
 
     private func key(for userID: String) -> String {
         "motive.cachedUserSettings.\(userID)"
+    }
+
+    private func nameKey(for userID: String) -> String {
+        "motive.preferredName.\(userID)"
     }
 }
 
