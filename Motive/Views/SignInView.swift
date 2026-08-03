@@ -5,7 +5,7 @@ struct SignInView: View {
     @EnvironmentObject private var appState: MotiveAppState
 
     private var legalURL: URL {
-        URL(string: "https://example.com/legal") ?? URL(fileURLWithPath: "/")
+        URL(string: "https://jacoblucas01.github.io/motive-app/") ?? URL(fileURLWithPath: "/")
     }
 
     var body: some View {
