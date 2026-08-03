@@ -1,0 +1,42 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xcscmblueprint
+
+# Swift Package Manager / package checkouts
+.build/
+.swiftpm/
+Package.resolved
+GoogleUtilities/
+gRPC/
+leveldb/
+GoogleAppMeasurement/
+nanopb/
+Promises/
+AppCheck/
+abseil/
+GoogleAdsOnDeviceConversion/
+GoogleDataTransport/
+Firebase/
+InteropForGoogle/
+GTMSessionFetcher/
+
+# App products
+Products/
+*.app
+*.ipa
+*.dSYM
+
+# Server/local secrets
+MotiveServer/
+node_modules/
+.env
+*.p8
+*firebase-adminsdk*.json
+service-account*.json
+
+# macOS
+.DS_Store
