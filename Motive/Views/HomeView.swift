@@ -95,7 +95,7 @@ struct HomeView: View {
         VStack(spacing: 12) {
             if appState.canSendStagingPush {
                 MotivePrimaryButton(
-                    title: appState.isWorking ? "Sending..." : "Send test push",
+                    title: appState.isWorking ? "Sending..." : "New quote",
                     systemImage: "bell.badge",
                     isDisabled: appState.isWorking
                 ) {

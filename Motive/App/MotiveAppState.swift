@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class MotiveAppState: ObservableObject {
     private let services: AppServices
+    private let profileCache = UserDefaultsProfileCache()
 
     @Published var route: AppRoute = .signIn
     @Published var user: MotiveUser?
@@ -86,6 +87,7 @@ final class MotiveAppState: ObservableObject {
     func saveProfileAndContinue() async {
         guard let user else { return }
         await runTask {
+            profileCache.save(profile: profile, notificationPreference: notificationPreference, for: user.id)
             try await services.profile.saveProfile(profile, for: user.id)
             try await uploadLatestAPNsTokenIfPossible()
             route = .notifications
@@ -99,6 +101,11 @@ final class MotiveAppState: ObservableObject {
             try await uploadLatestAPNsTokenIfPossible()
             route = .home
         }
+    }
+
+    func cacheCurrentSettingsIfPossible() {
+        guard let user else { return }
+        profileCache.save(profile: profile, notificationPreference: notificationPreference, for: user.id)
     }
 
     func persistCurrentSettingsIfPossible() async {
@@ -196,6 +203,7 @@ final class MotiveAppState: ObservableObject {
     func deleteAccount() async {
         guard let user else { return }
         await runTask {
+            profileCache.clear(for: user.id)
             try await services.profile.deleteAccountData(for: user.id)
             await services.auth.signOut()
             resetSession()
@@ -203,6 +211,9 @@ final class MotiveAppState: ObservableObject {
     }
 
     func signOut() async {
+        if let user {
+            profileCache.clear(for: user.id)
+        }
         await services.auth.signOut()
         resetSession()
     }
@@ -217,6 +228,10 @@ final class MotiveAppState: ObservableObject {
 
     private func loadSession(for signedInUser: MotiveUser) async throws {
         user = signedInUser
+        if let cached = profileCache.load(for: signedInUser.id) {
+            profile = cached.profile
+            notificationPreference = cached.notificationPreference
+        }
         if let savedPreference = try await services.profile.loadNotificationPreference(for: signedInUser.id) {
             notificationPreference = savedPreference
         }
@@ -233,6 +248,7 @@ final class MotiveAppState: ObservableObject {
 
     private func persistSettings(for user: MotiveUser) async throws {
         notificationPreference.timezoneIdentifier = TimeZone.current.identifier
+        profileCache.save(profile: profile, notificationPreference: notificationPreference, for: user.id)
         try await services.profile.saveProfile(profile, for: user.id)
         try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
     }
@@ -304,4 +320,34 @@ final class MotiveAppState: ObservableObject {
             return error.localizedDescription
         }
     }
+}
+
+private struct UserDefaultsProfileCache {
+    private let defaults = UserDefaults.standard
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    func load(for userID: String) -> CachedUserSettings? {
+        guard let data = defaults.data(forKey: key(for: userID)) else { return nil }
+        return try? decoder.decode(CachedUserSettings.self, from: data)
+    }
+
+    func save(profile: UserProfile, notificationPreference: NotificationPreference, for userID: String) {
+        let cached = CachedUserSettings(profile: profile, notificationPreference: notificationPreference)
+        guard let data = try? encoder.encode(cached) else { return }
+        defaults.set(data, forKey: key(for: userID))
+    }
+
+    func clear(for userID: String) {
+        defaults.removeObject(forKey: key(for: userID))
+    }
+
+    private func key(for userID: String) -> String {
+        "motive.cachedUserSettings.\(userID)"
+    }
+}
+
+private struct CachedUserSettings: Codable {
+    var profile: UserProfile
+    var notificationPreference: NotificationPreference
 }

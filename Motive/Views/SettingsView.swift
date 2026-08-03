@@ -75,6 +75,9 @@ struct SettingsView: View {
                 }
                 .textContentType(.givenName)
                 .motiveField()
+                .onChange(of: appState.profile.preferredName) { _, _ in
+                    appState.cacheCurrentSettingsIfPossible()
+                }
             }
         }
         .settingsGroup()
