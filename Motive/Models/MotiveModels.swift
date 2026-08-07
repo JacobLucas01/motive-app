@@ -7,9 +7,10 @@ enum AppRoute: Hashable {
     case paywall
     case home
     case settings
+    case savedQuotes
 }
 
-struct MotiveUser: Identifiable, Equatable {
+struct MotiveUser: Identifiable, Equatable, Codable {
     let id: String
     var displayName: String
     var email: String?
@@ -25,6 +26,12 @@ enum StressTopic: String, CaseIterable, Identifiable, Codable {
     case relationships = "Relationships"
     case money = "Money"
     case health = "Health"
+    case confidence = "Confidence"
+    case discipline = "Discipline"
+    case energy = "Energy"
+    case habits = "Habits"
+    case courage = "Courage"
+    case purpose = "Purpose"
 
     var id: String { rawValue }
 
@@ -47,6 +54,18 @@ enum StressTopic: String, CaseIterable, Identifiable, Codable {
             self = .money
         case "Health", "Health habits":
             self = .health
+        case "Confidence":
+            self = .confidence
+        case "Discipline":
+            self = .discipline
+        case "Energy":
+            self = .energy
+        case "Habits":
+            self = .habits
+        case "Courage":
+            self = .courage
+        case "Purpose":
+            self = .purpose
         default:
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown profile signal: \(value)"))
         }
@@ -139,7 +158,7 @@ enum SubscriptionState: Equatable {
 }
 
 struct PremiumSubscriptionOffer: Equatable {
-    static let productID = "motive_weekly"
+    static let productID = "motive_premium_weekly"
 
     var productID: String = Self.productID
     var displayName: String = "Motive Premium Weekly"
@@ -154,6 +173,12 @@ struct MotivationQuote: Identifiable, Equatable {
     let id = UUID()
     var text: String
     var createdAt: Date = .now
+}
+
+struct SavedQuote: Identifiable, Equatable, Codable {
+    var id = UUID()
+    var text: String
+    var savedAt: Date = .now
 }
 
 extension String {

@@ -1,22 +1,21 @@
-import CoreMotion
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct HomeView: View {
     @EnvironmentObject private var appState: MotiveAppState
-    @State private var quoteOffset: CGSize = .zero
-    @State private var motion = QuoteMotionModel()
+    @State private var isShowingCopied = false
 
     var body: some View {
         GeometryReader { proxy in
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     header
 
                     Spacer(minLength: 54)
 
                     quoteCard
-                        .offset(quoteOffset)
-                        .animation(.smooth(duration: 0.18), value: quoteOffset)
 
                     Spacer(minLength: 54)
 
@@ -27,32 +26,29 @@ struct HomeView: View {
             }
             .motiveScreen()
         }
-        .onAppear {
-            motion.start { offset in
-                quoteOffset = offset
-            }
-        }
-        .onDisappear {
-            motion.stop()
-            quoteOffset = .zero
-        }
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Today")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(MotiveTheme.accent)
-                Text("Hi, \(greetingName)")
-                    .font(.system(size: 30, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
+        HStack(alignment: .center, spacing: 6) {
+            Text("\(timeOfDayGreeting),\n\(greetingName)")
+                .font(.system(size: 25, weight: .bold))
+                .minimumScaleFactor(0.82)
 
             Spacer(minLength: 12)
 
             Button {
+                performSelectionHaptic()
+                appState.route = .savedQuotes
+            } label: {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 42, height: 42)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(MotiveTheme.primaryText)
+
+            Button {
+                performSelectionHaptic()
                 appState.route = .settings
             } label: {
                 Image(systemName: "gearshape")
@@ -60,18 +56,15 @@ struct HomeView: View {
                     .frame(width: 42, height: 42)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(MotiveTheme.secondaryText)
-            .background(MotiveTheme.elevatedSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MotiveTheme.radius, style: .continuous))
-            .motiveGlass(tint: MotiveTheme.elevatedSurface)
+            .foregroundStyle(MotiveTheme.primaryText)
         }
     }
 
     private var quoteCard: some View {
-        VStack(alignment: .center, spacing: 18) {
+        VStack(alignment: .center, spacing: 22) {
             Image(systemName: "quote.opening")
                 .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(MotiveTheme.accent)
+                .foregroundStyle(MotiveTheme.primaryText)
 
             Text(appState.currentQuote.text)
                 .font(.system(size: 30, weight: .bold))
@@ -79,40 +72,76 @@ struct HomeView: View {
                 .foregroundStyle(MotiveTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Latest notification quote")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(MotiveTheme.secondaryText)
+            HStack(spacing: 18) {
+                Button {
+                    copyCurrentQuote()
+                } label: {
+                    Image(systemName: isShowingCopied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(MotiveTheme.accent)
+
+                ShareLink(item: appState.currentQuote.text) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(MotiveTheme.primaryText)
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .center)
-        .background(MotiveTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: MotiveTheme.radius + 6, style: .continuous))
-        .motiveGlass(cornerRadius: MotiveTheme.radius + 6, tint: MotiveTheme.surface, interactive: false)
     }
 
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            if appState.canSendStagingPush {
+            if appState.subscriptionState.hasPremiumAccess {
                 MotivePrimaryButton(
-                    title: appState.isWorking ? "Sending..." : "New quote",
-                    systemImage: "bell.badge",
+                    title: appState.isWorking ? "Loading..." : "New quote",
+                    systemImage: "sparkles",
                     isDisabled: appState.isWorking
                 ) {
                     Task {
-                        await appState.sendStagingTestPush()
+                        await appState.generatePremiumQuote()
                     }
                 }
             }
 
+            MotiveSecondaryButton(
+                title: appState.isCurrentQuoteSaved ? "Unsave quote" : "Save quote",
+                systemImage: appState.isCurrentQuoteSaved ? "bookmark.fill" : "bookmark"
+            ) {
+                toggleSavedQuote()
+            }
+
             if appState.subscriptionState == .free {
-                MotiveSecondaryButton(title: "View premium", systemImage: "crown") {
+                MotiveSecondaryButton(
+                    title: "View premium",
+                    systemImage: "crown",
+                    iconColor: Color(red: 1.0, green: 0.76, blue: 0.22)
+                ) {
                     appState.route = .paywall
                 }
             }
 
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var timeOfDayGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12:
+            return "Good morning"
+        case 12..<17:
+            return "Good afternoon"
+        default:
+            return "Good evening"
+        }
     }
 
     private var greetingName: String {
@@ -133,34 +162,32 @@ struct HomeView: View {
     private func firstName(from name: String) -> String {
         name.components(separatedBy: .whitespacesAndNewlines).first ?? name
     }
-}
 
-private final class QuoteMotionModel {
-    private let manager = CMMotionManager()
-    private let maxOffset: CGFloat = 10
-
-    func start(onChange: @escaping (CGSize) -> Void) {
-        guard manager.isDeviceMotionAvailable else { return }
-        manager.deviceMotionUpdateInterval = 1.0 / 30.0
-        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self, let motion else { return }
-            let roll = CGFloat(motion.attitude.roll)
-            let pitch = CGFloat(motion.attitude.pitch)
-            onChange(
-                CGSize(
-                    width: self.clamped(roll * self.maxOffset),
-                    height: self.clamped(-pitch * self.maxOffset * 0.55)
-                )
-            )
+    private func toggleSavedQuote() {
+        performSelectionHaptic()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            appState.toggleCurrentQuoteSaved()
         }
     }
 
-    func stop() {
-        manager.stopDeviceMotionUpdates()
+    private func copyCurrentQuote() {
+        performSelectionHaptic()
+        #if canImport(UIKit)
+        UIPasteboard.general.string = appState.currentQuote.text
+        #endif
+        isShowingCopied = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.2))
+            isShowingCopied = false
+        }
     }
 
-    private func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, -maxOffset), maxOffset)
+    private func performSelectionHaptic() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
     }
 }
 

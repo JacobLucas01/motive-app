@@ -48,7 +48,21 @@ final class MotiveAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        saveWidgetQuoteIfPossible(from: notification)
+        return [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        saveWidgetQuoteIfPossible(from: response.notification)
+    }
+
+    private func saveWidgetQuoteIfPossible(from notification: UNNotification) {
+        let content = notification.request.content
+        guard content.userInfo["type"] as? String == "motivation" else { return }
+        MotiveWidgetQuoteStore.save(content.body)
     }
 }
 #endif

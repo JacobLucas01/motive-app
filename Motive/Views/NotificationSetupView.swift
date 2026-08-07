@@ -9,12 +9,12 @@ struct NotificationSetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("When should it show up?")
+                Text("Set your Pro notification time")
                     .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(MotiveTheme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Pick a rhythm for motivation pushes. Your backend can use this preference when scheduling APNs sends.")
+                Text("Motive Pro sends personalized motivation as push notifications. Choose when you want those quotes to arrive.")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(MotiveTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -53,13 +53,13 @@ struct NotificationSetupView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                MotivePrimaryButton(title: "Enable notifications", systemImage: "bell.badge") {
+                MotivePrimaryButton(title: "Turn on notifications", systemImage: "bell.badge") {
                     Task {
                         await appState.enableNotificationsAndContinue()
                     }
                 }
 
-                MotiveSecondaryButton(title: "Skip for now", systemImage: "arrow.right") {
+                MotiveSecondaryButton(title: "Not now", systemImage: "arrow.right") {
                     Task {
                         await appState.skipNotifications()
                     }

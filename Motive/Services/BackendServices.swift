@@ -27,6 +27,10 @@ struct BackendProfileService: ProfileServicing {
         try await apiClient.saveNotificationPreference(preference)
     }
 
+    func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws {
+        try await apiClient.saveSubscriptionState(state)
+    }
+
     func deleteAccountData(for userID: String) async throws {
         try await apiClient.deleteAccount()
     }
@@ -65,6 +69,10 @@ struct BackendMotivationService: MotivationServicing {
     }
 
     func latestDeliveredQuote() async throws -> MotivationQuote? {
-        try await apiClient.loadCurrentUser().lastNotificationQuote
+        try await apiClient.loadCurrentUser().latestQuote
+    }
+
+    func generateQuote(for profile: UserProfile, avoiding recentQuotes: [String]) async throws -> MotivationQuote {
+        try await apiClient.generateQuote(for: profile, avoiding: recentQuotes)
     }
 }

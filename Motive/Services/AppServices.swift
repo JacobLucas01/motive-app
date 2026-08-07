@@ -22,6 +22,7 @@ protocol ProfileServicing {
     func loadNotificationPreference(for userID: String) async throws -> NotificationPreference?
     func saveProfile(_ profile: UserProfile, for userID: String) async throws
     func saveNotificationPreference(_ preference: NotificationPreference, for userID: String) async throws
+    func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws
     func deleteAccountData(for userID: String) async throws
 }
 
@@ -34,6 +35,7 @@ protocol NotificationServicing {
 
 protocol MotivationServicing {
     func latestDeliveredQuote() async throws -> MotivationQuote?
+    func generateQuote(for profile: UserProfile, avoiding recentQuotes: [String]) async throws -> MotivationQuote
 }
 
 protocol SubscriptionServicing {
@@ -196,6 +198,8 @@ actor InMemoryProfileService: ProfileServicing {
         notificationPreferences[userID] = preference
     }
 
+    func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws { }
+
     func deleteAccountData(for userID: String) async throws {
         profiles[userID] = nil
         notificationPreferences[userID] = nil
@@ -253,6 +257,10 @@ struct MockMotivationService: MotivationServicing {
     func latestDeliveredQuote() async throws -> MotivationQuote? {
         MotivationQuote(text: "Take one clean step today.")
     }
+
+    func generateQuote(for profile: UserProfile, avoiding recentQuotes: [String]) async throws -> MotivationQuote {
+        MotivationQuote(text: "The secret of getting ahead is getting started.")
+    }
 }
 
 #if canImport(StoreKit)
@@ -266,6 +274,10 @@ struct StoreKitSubscriptionService: SubscriptionServicing {
     func loadPremiumOffer() async -> PremiumSubscriptionOffer {
         do {
             let product = try await loadProduct()
+
+            print("✅ STOREKIT PRODUCT FOUND:", product.id)
+            print("✅ PRICE:", product.displayPrice)
+
             return PremiumSubscriptionOffer(
                 productID: product.id,
                 displayName: product.displayName,
@@ -274,6 +286,7 @@ struct StoreKitSubscriptionService: SubscriptionServicing {
                 description: product.description
             )
         } catch {
+            print("❌ STOREKIT PRODUCT FAILED:", error)
             return .fallback
         }
     }
@@ -302,9 +315,15 @@ struct StoreKitSubscriptionService: SubscriptionServicing {
     }
 
     private func loadProduct() async throws -> Product {
-        guard let product = try await Product.products(for: [productID]).first else {
+        let products = try await Product.products(for: [productID])
+
+        print("Requested product:", productID)
+        print("Products returned:", products.map(\.id))
+
+        guard let product = products.first else {
             throw StoreKitSubscriptionError.productUnavailable
         }
+
         return product
     }
 

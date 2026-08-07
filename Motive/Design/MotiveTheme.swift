@@ -4,17 +4,17 @@ import UIKit
 #endif
 
 enum MotiveTheme {
-    static let background = Color(red: 0.03, green: 0.035, blue: 0.04)
+    static let background = Color("DarkBackground")
     static let surface = Color(red: 0.075, green: 0.08, blue: 0.09)
     static let elevatedSurface = Color(red: 0.105, green: 0.115, blue: 0.13)
     static let primaryText = Color(red: 0.94, green: 0.96, blue: 0.95)
     static let secondaryText = Color(red: 0.60, green: 0.64, blue: 0.66)
-    static let accent = Color(red: 0.55, green: 0.94, blue: 0.72)
-    static let accentMuted = Color(red: 0.16, green: 0.28, blue: 0.21)
+    static let accent = Color(red: 0.33, green: 0.64, blue: 1.0)
+    static let accentMuted = Color(red: 0.10, green: 0.18, blue: 0.30)
     static let warning = Color(red: 1.0, green: 0.72, blue: 0.38)
     static let border = Color.white.opacity(0.10)
 
-    static let pagePadding: CGFloat = 22
+    static let pagePadding: CGFloat = 16
     static let controlHeight: CGFloat = 52
     static let radius: CGFloat = 14
 }
@@ -23,13 +23,24 @@ struct MotivePrimaryButton: View {
     let title: String
     let systemImage: String
     var isDisabled = false
+    var placesIconTrailing = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
+            HStack(spacing: 8) {
+                if !placesIconTrailing {
+                    Image(systemName: systemImage)
+                }
+
+                Text(title)
+
+                if placesIconTrailing {
+                    Image(systemName: systemImage)
+                }
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
         }
         .buttonStyle(.plain)
         .foregroundStyle(MotiveTheme.background)
@@ -43,13 +54,18 @@ struct MotivePrimaryButton: View {
 struct MotiveSecondaryButton: View {
     let title: String
     let systemImage: String
+    var iconColor = MotiveTheme.primaryText
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(iconColor)
+                Text(title)
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
         }
         .buttonStyle(.plain)
         .foregroundStyle(MotiveTheme.primaryText)
@@ -170,16 +186,10 @@ extension View {
     @ViewBuilder
     func motiveGlass(cornerRadius: CGFloat = MotiveTheme.radius, tint: Color? = nil, interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
-            if let tint {
-                if interactive {
-                    glassEffect(.regular.tint(tint).interactive(), in: .rect(cornerRadius: cornerRadius))
-                } else {
-                    glassEffect(.regular.tint(tint), in: .rect(cornerRadius: cornerRadius))
-                }
-            } else if interactive {
-                glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+            if interactive {
+                glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
             } else {
-                glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                glassEffect(.clear, in: .rect(cornerRadius: cornerRadius))
             }
         } else {
             self
@@ -189,16 +199,10 @@ extension View {
     @ViewBuilder
     func motiveCapsuleGlass(tint: Color? = nil, interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
-            if let tint {
-                if interactive {
-                    glassEffect(.regular.tint(tint).interactive(), in: Capsule(style: .continuous))
-                } else {
-                    glassEffect(.regular.tint(tint), in: Capsule(style: .continuous))
-                }
-            } else if interactive {
-                glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+            if interactive {
+                glassEffect(.clear.interactive(), in: Capsule(style: .continuous))
             } else {
-                glassEffect(.regular, in: Capsule(style: .continuous))
+                glassEffect(.clear, in: Capsule(style: .continuous))
             }
         } else {
             self

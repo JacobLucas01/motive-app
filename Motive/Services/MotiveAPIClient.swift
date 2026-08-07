@@ -36,13 +36,18 @@ struct MotiveAPIClient {
         _ = try await send(path: "/v1/notification-settings", method: "POST", body: preference, responseType: EmptyResponse.self)
     }
 
+    func saveSubscriptionState(_ state: SubscriptionState) async throws {
+        let body = SubscriptionStateRequest(state: state.serverValue, hasPremiumAccess: state.hasPremiumAccess)
+        _ = try await send(path: "/v1/subscription-state", method: "POST", body: body, responseType: EmptyResponse.self)
+    }
+
     func uploadAPNsToken(_ token: String) async throws {
         let body = APNsTokenRequest(token: token, environment: apnsEnvironment)
         _ = try await send(path: "/v1/devices/apns-token", method: "POST", body: body, responseType: EmptyResponse.self)
     }
 
-    func generateQuote(for profile: UserProfile) async throws -> MotivationQuote {
-        let body = MotivationQuoteRequest(profile: profile)
+    func generateQuote(for profile: UserProfile, avoiding recentQuotes: [String]) async throws -> MotivationQuote {
+        let body = MotivationQuoteRequest(profile: profile, recentQuotes: recentQuotes)
         let response = try await send(path: "/v1/motivation/quote", method: "POST", body: body, responseType: MotivationQuoteResponse.self)
         return MotivationQuote(text: response.quote)
     }
@@ -126,12 +131,18 @@ struct FirebaseAuthTokenProvider: AuthTokenProviding {
 struct BackendCurrentUser: Decodable {
     let profile: UserProfile?
     let notificationPreference: NotificationPreference?
+    let lastGeneratedQuote: BackendLastGeneratedQuote?
     let lastNotification: BackendLastNotification?
 
-    var lastNotificationQuote: MotivationQuote? {
-        guard let quote = lastNotification?.quote, !quote.trimmed.isEmpty else { return nil }
+    var latestQuote: MotivationQuote? {
+        let quote = lastGeneratedQuote?.quote ?? lastNotification?.quote
+        guard let quote, !quote.trimmed.isEmpty else { return nil }
         return MotivationQuote(text: quote)
     }
+}
+
+struct BackendLastGeneratedQuote: Decodable {
+    let quote: String?
 }
 
 struct BackendLastNotification: Decodable {
@@ -145,12 +156,33 @@ struct APNsTokenRequest: Encodable {
     let environment: String
 }
 
+struct SubscriptionStateRequest: Encodable {
+    let state: String
+    let hasPremiumAccess: Bool
+}
+
 struct MotivationQuoteRequest: Encodable {
     let profile: UserProfile
+    let recentQuotes: [String]
 }
 
 struct MotivationQuoteResponse: Decodable {
     let quote: String
+}
+
+private extension SubscriptionState {
+    var serverValue: String {
+        switch self {
+        case .unknown:
+            return "unknown"
+        case .free:
+            return "free"
+        case .trial:
+            return "trial"
+        case .active:
+            return "active"
+        }
+    }
 }
 
 struct TestPushResponse: Decodable {

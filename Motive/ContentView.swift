@@ -2,14 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appState: MotiveAppState
-    @State private var isShowingLaunchSplash = true
     @State private var rootRoute: AppRoute = .signIn
     @State private var navigationPath: [AppRoute] = []
 
     var body: some View {
         ZStack {
             NavigationStack(path: $navigationPath) {
-                routeView(for: rootRoute)
+                routeView(for: currentRootRoute)
                     .navigationDestination(for: AppRoute.self) { route in
                         routeView(for: route)
                             .toolbar(.hidden, for: .navigationBar)
@@ -17,12 +16,6 @@ struct ContentView: View {
                     }
                     .toolbar(.hidden, for: .navigationBar)
                     .navigationBarBackButtonHidden(true)
-            }
-
-            if isShowingLaunchSplash {
-                LaunchSplashView()
-                    .transition(.opacity)
-                    .zIndex(10)
             }
 
             if appState.isWorking {
@@ -44,6 +37,19 @@ struct ContentView: View {
         } message: {
             Text(appState.errorMessage ?? "Try again.")
         }
+        .alert(
+            "Motive",
+            isPresented: Binding(
+                get: { appState.noticeMessage != nil },
+                set: { if !$0 { appState.noticeMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                appState.noticeMessage = nil
+            }
+        } message: {
+            Text(appState.noticeMessage ?? "")
+        }
         .onChange(of: appState.route) { _, newRoute in
             syncNavigation(to: newRoute)
         }
@@ -55,34 +61,72 @@ struct ContentView: View {
         }
         .task {
             syncNavigation(to: appState.route)
-            try? await Task.sleep(for: .milliseconds(650))
-            withAnimation(.easeOut(duration: 0.28)) {
-                isShowingLaunchSplash = false
-            }
+        }
+    }
+
+    private var currentRootRoute: AppRoute {
+        guard navigationPath.isEmpty else { return rootRoute }
+
+        switch appState.route {
+        case .home:
+            return .home
+        case .settings, .savedQuotes:
+            return .home
+        default:
+            return rootRoute
         }
     }
 
     private func syncNavigation(to route: AppRoute) {
         switch route {
-        case .signIn, .onboarding, .notifications:
-            rootRoute = route
+        case .signIn:
+            rootRoute = .signIn
             navigationPath = []
+        case .onboarding:
+            rootRoute = .signIn
+            navigationPath = [.onboarding]
         case .paywall:
-            if rootRoute == .home {
+            if isInNewUserFlow {
+                navigationPath = newUserPath(endingAt: .paywall)
+            } else if rootRoute == .home {
                 navigationPath = [.paywall]
             } else {
                 rootRoute = .paywall
                 navigationPath = []
             }
+        case .notifications:
+            if isInNewUserFlow {
+                navigationPath = newUserPath(endingAt: .notifications)
+            } else if rootRoute == .home, navigationPath.contains(.paywall) {
+                navigationPath = [.paywall, .notifications]
+            } else {
+                rootRoute = .notifications
+                navigationPath = []
+            }
         case .home:
             rootRoute = .home
             navigationPath = []
-        case .settings:
+        case .settings, .savedQuotes:
             if rootRoute != .home {
                 rootRoute = .home
             }
-            navigationPath = [.settings]
+            navigationPath = [route]
         }
+    }
+
+    private var isInNewUserFlow: Bool {
+        rootRoute == .signIn || navigationPath.contains(.onboarding)
+    }
+
+    private func newUserPath(endingAt route: AppRoute) -> [AppRoute] {
+        var path: [AppRoute] = [.onboarding]
+        if navigationPath.contains(.paywall) || route == .paywall {
+            path.append(.paywall)
+        }
+        if route == .notifications {
+            path.append(.notifications)
+        }
+        return path
     }
 
     @ViewBuilder
@@ -100,6 +144,8 @@ struct ContentView: View {
             HomeView()
         case .settings:
             SettingsView()
+        case .savedQuotes:
+            SavedQuotesView()
         }
     }
 }
@@ -111,7 +157,7 @@ private struct LoadingOverlay: View {
                 .ignoresSafeArea()
 
             ProgressView()
-                .tint(MotiveTheme.accent)
+                .tint(.white)
                 .scaleEffect(1.1)
                 .padding(22)
                 .motiveLoadingGlassBackground()
@@ -123,7 +169,7 @@ private extension View {
     @ViewBuilder
     func motiveLoadingGlassBackground() -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular, in: .rect(cornerRadius: MotiveTheme.radius + 4))
+            glassEffect(.clear, in: .rect(cornerRadius: MotiveTheme.radius + 4))
         } else {
             background(.ultraThinMaterial)
                 .overlay(

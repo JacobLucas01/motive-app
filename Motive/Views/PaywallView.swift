@@ -2,29 +2,31 @@ import SwiftUI
 
 struct PaywallView: View {
     @EnvironmentObject private var appState: MotiveAppState
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Keep it personal")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(MotiveTheme.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Unlock generated motivation notifications tailored to your profile and schedule.")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(MotiveTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("More with Premium")
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(MotiveTheme.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        Text("Unlock notifications tailored to your profile and schedule.")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(MotiveTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    VStack(spacing: 12) {
+                        PaywallBenefit(icon: "quote.opening", title: "Real quotes", detail: "Motivational quotes, selected for what you are dealing with.")
+                        PaywallBenefit(icon: "bell.badge", title: "Scheduled pushes", detail: "Morning, afternoon, evening, random, or custom timing.")
+                        PaywallBenefit(icon: "heart.text.square", title: "Based on how you feel", detail: "Your focus areas and current problem shape what gets sent.")
+                    }
+                }
             }
-
-            VStack(spacing: 12) {
-                PaywallBenefit(icon: "quote.opening", title: "Real quotes", detail: "Motivation from real people, selected for what you are dealing with.")
-                PaywallBenefit(icon: "bell.badge", title: "Scheduled pushes", detail: "Morning, afternoon, evening, random, or custom timing.")
-                PaywallBenefit(icon: "heart.text.square", title: "Based on how you feel", detail: "Your focus areas and current problem shape what gets sent.")
-            }
-
-            Spacer()
-
+            
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(appState.premiumOffer.displayPrice)
@@ -33,25 +35,25 @@ struct PaywallView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(MotiveTheme.secondaryText)
                 }
-
-                Text("Cancel anytime. About $0.14 per day.")
+                
+                Text("About $0.14 per day. Cancel anytime.")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(MotiveTheme.secondaryText)
             }
-
+            
             VStack(spacing: 12) {
-                MotivePrimaryButton(title: "Start free trial", systemImage: "sparkle") {
+                MotivePrimaryButton(title: "Get Premium", systemImage: "sparkle") {
                     Task {
                         await appState.purchasePremium()
                     }
                 }
-
-                MotiveSecondaryButton(title: "Restore purchases", systemImage: "arrow.clockwise") {
+                
+                MotiveSecondaryButton(title: "Restore purchase", systemImage: "arrow.clockwise") {
                     Task {
                         await appState.restorePurchases()
                     }
                 }
-
+                
                 Button("Continue without premium") {
                     Task {
                         await appState.continueWithoutPremium()
@@ -74,14 +76,14 @@ private struct PaywallBenefit: View {
     let icon: String
     let title: String
     let detail: String
-
+    
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(MotiveTheme.accent)
                 .frame(width: 28)
-
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 16, weight: .semibold))

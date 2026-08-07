@@ -11,8 +11,8 @@ struct OnboardingView: View {
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("What should Motive understand?")
                         .font(.system(size: 30, weight: .bold))

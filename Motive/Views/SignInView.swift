@@ -13,27 +13,24 @@ struct SignInView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 36)
 
-                VStack(spacing: 14) {
-                    Circle()
-                        .fill(MotiveTheme.accent)
-                        .frame(width: 64, height: 64)
+                VStack(spacing: 18) {
+                    Image("MotiveLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 100)
 
-                    Text("Motive")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundStyle(MotiveTheme.primaryText)
-
-                    Text("Short, personal motivation when your day needs a reset.")
-                        .font(.system(size: 16, weight: .medium))
+                    Text("Motivating words sent when you\nneed a push.")
+                        .font(.system(size: 18, weight: .medium))
+                        .lineSpacing(6)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(MotiveTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 320)
                 }
                 .frame(maxWidth: .infinity)
 
                 Spacer(minLength: 44)
 
-                VStack(spacing: 14) {
+                VStack(spacing: 16) {
                     SignInWithAppleButton(.continue) { request in
                         appState.configureAppleSignInRequest(request)
                     } onCompletion: { result in
@@ -51,7 +48,8 @@ struct SignInView: View {
                         .multilineTextAlignment(.center)
                         .foregroundStyle(MotiveTheme.secondaryText)
                         .tint(MotiveTheme.secondaryText)
-                        .frame(maxWidth: 300)
+                        .lineSpacing(6)
+                        .padding(.horizontal)
                 }
                 .frame(maxWidth: .infinity)
             }
