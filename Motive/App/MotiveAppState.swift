@@ -3,6 +3,8 @@ import Combine
 import Foundation
 import SwiftUI
 import UserNotifications
+import Firebase
+import FirebaseFirestore
 
 @MainActor
 final class MotiveAppState: ObservableObject {
@@ -33,6 +35,8 @@ final class MotiveAppState: ObservableObject {
     private let recentQuoteMemoryLimit = 6
     private let recentQuoteCharacterLimit = 90
     private let savedQuoteNotificationPrefix = "motive.savedQuoteRepeat"
+    
+    private var latestQuoteListener: ListenerRegistration?
 
     convenience init() {
         self.init(services: .live)
@@ -50,9 +54,41 @@ final class MotiveAppState: ObservableObject {
     }
 
     deinit {
+        latestQuoteListener?.remove()
+
         for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+    
+    private func startListeningForLatestQuote(for user: MotiveUser) {
+        latestQuoteListener?.remove()
+
+        latestQuoteListener = Firestore.firestore()
+            .collection("users")
+            .document(user.id)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
+
+                if let error {
+                    print("❌ Latest quote listener error:", error)
+                    return
+                }
+
+                guard
+                    let data = snapshot?.data(),
+                    let latestQuote = data["latestQuote"] as? [String: Any],
+                    let quoteText = latestQuote["quote"] as? String,
+                    !quoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else {
+                    return
+                }
+
+                Task { @MainActor in
+                    print("🔥 FIREBASE NEW QUOTE:", quoteText)
+                    self.applyDeliveredQuoteText(quoteText)
+                }
+            }
     }
 
     func bootstrap() async {
@@ -119,10 +155,47 @@ final class MotiveAppState: ObservableObject {
 
     func saveSettingsAndReturnHome() async {
         guard let user else { return }
+
         await runTask {
+            let center = UNUserNotificationCenter.current()
+            let settings = await notificationSettings(for: center)
+
+            if settings.authorizationStatus == .notDetermined {
+                let granted = try await services.notifications.requestAuthorization()
+
+                guard granted else {
+                    notificationPreference.isEnabled = false
+                    try await persistSettings(for: user)
+                    return
+                }
+            }
+
+            let updatedSettings = await notificationSettings(for: center)
+
+            let notificationsAllowed =
+                updatedSettings.authorizationStatus == .authorized ||
+                updatedSettings.authorizationStatus == .provisional ||
+                updatedSettings.authorizationStatus == .ephemeral
+
+            // Saving a notification time means notifications should be ON.
+            notificationPreference.isEnabled = notificationsAllowed
+            notificationPreference.timezoneIdentifier = TimeZone.current.identifier
+
+            if notificationPreference.isEnabled {
+                await services.notifications.registerForRemoteNotifications()
+            }
+
             try await persistSettings(for: user)
-            try await syncSavedQuoteNotifications()
             try await uploadLatestAPNsTokenIfPossible()
+            try await syncSavedQuoteNotifications()
+
+            print("🔔 SETTINGS SAVED")
+            print("enabled:", notificationPreference.isEnabled)
+            print("timing:", notificationPreference.timing)
+            print("hour:", notificationPreference.customHour)
+            print("minute:", notificationPreference.customMinute)
+            print("timezone:", notificationPreference.timezoneIdentifier)
+
             route = .home
         }
     }
@@ -256,11 +329,11 @@ final class MotiveAppState: ObservableObject {
 
         guard let user else { return }
 
-//        let usedCount = profileCache.loadDailyNewQuoteCount(for: user.id)
-//        guard usedCount < dailyNewQuoteLimit else {
-//            noticeMessage = "You have reached today's 5 new quote limit."
-//            return
-//        }
+        let usedCount = profileCache.loadDailyNewQuoteCount(for: user.id)
+        guard usedCount < dailyNewQuoteLimit else {
+            noticeMessage = "You have reached today's 5 new quote limit."
+            return
+        }
 
         await runTask {
             if repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: 4) {
@@ -362,11 +435,14 @@ final class MotiveAppState: ObservableObject {
         savedQuotes = []
         subscriptionState = .unknown
         route = .signIn
+        latestQuoteListener?.remove()
+        latestQuoteListener = nil
     }
 
     private func restoreCachedSessionIfPossible() {
         guard user == nil, let cachedUser = profileCache.loadLastUser() else { return }
         user = cachedUser
+        startListeningForLatestQuote(for: cachedUser)
 
         if let cached = profileCache.load(for: cachedUser.id) {
             profile = cached.profile
@@ -382,6 +458,7 @@ final class MotiveAppState: ObservableObject {
     private func loadSession(for signedInUser: MotiveUser) async throws {
         user = signedInUser
         await refreshSubscriptionState()
+        startListeningForLatestQuote(for: signedInUser)
         profileCache.saveLastUser(signedInUser)
         let cached = profileCache.load(for: signedInUser.id)
         if let cached {
@@ -606,7 +683,31 @@ final class MotiveAppState: ObservableObject {
             }
         }
 
-        notificationObservers = [tokenObserver, failureObserver]
+        let quoteObserver = NotificationCenter.default.addObserver(
+            forName: APNsDeviceTokenCenter.didReceiveMotivationQuote,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let quote = notification.userInfo?["quote"] as? String else {
+                return
+            }
+
+            Task { @MainActor in
+                self.applyDeliveredQuoteText(quote)
+            }
+        }
+
+        notificationObservers = [tokenObserver, failureObserver, quoteObserver]
+    }
+
+    private func applyDeliveredQuoteText(_ quoteText: String) {
+        let quote = quoteText.trimmed
+        guard !quote.isEmpty, currentQuote.text != quote else { return }
+        currentQuote = MotivationQuote(text: quote)
+        if let user {
+            rememberRecentQuote(quote, for: user.id)
+        }
     }
 
     private func runTask(_ operation: () async throws -> Void) async {

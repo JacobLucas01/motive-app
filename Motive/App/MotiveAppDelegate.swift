@@ -7,6 +7,7 @@ import UIKit
 enum APNsDeviceTokenCenter {
     static let didRegisterToken = Notification.Name("Motive.APNsDeviceTokenCenter.didRegisterToken")
     static let didFailToRegister = Notification.Name("Motive.APNsDeviceTokenCenter.didFailToRegister")
+    static let didReceiveMotivationQuote = Notification.Name("Motive.APNsDeviceTokenCenter.didReceiveMotivationQuote")
     static var latestToken: String?
 }
 
@@ -62,7 +63,15 @@ final class MotiveAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private func saveWidgetQuoteIfPossible(from notification: UNNotification) {
         let content = notification.request.content
         guard content.userInfo["type"] as? String == "motivation" else { return }
-        MotiveWidgetQuoteStore.save(content.body)
+        let quote = content.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !quote.isEmpty else { return }
+
+        MotiveWidgetQuoteStore.save(quote)
+        NotificationCenter.default.post(
+            name: APNsDeviceTokenCenter.didReceiveMotivationQuote,
+            object: nil,
+            userInfo: ["quote": quote]
+        )
     }
 }
 #endif
