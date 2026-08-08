@@ -14,60 +14,69 @@ struct QuoteCameraScannerView: View {
     @State private var quoteText = ""
     @State private var isShowingCamera = false
     @State private var isShowingEntry = false
+    @FocusState private var isQuoteEditorFocused: Bool
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading) {
-                Button {
-                    onCancel()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 42, height: 42)
+            Group {
+                if isShowingEntry {
+                    quoteEntryView
+                } else if let capturedImage {
+                    imagePreviewView(capturedImage)
+                } else {
+                    cameraStartView
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(MotiveTheme.primaryText)
-                
-                Group {
-                    if isShowingEntry {
-                        quoteEntryView
-                    } else if let capturedImage {
-                        imagePreviewView(capturedImage)
-                    } else {
-                        cameraStartView
+            }
+            .motiveScreen()
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 42, height: 42)
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(MotiveTheme.primaryText)
                 }
-                .motiveScreen()
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
             QuoteCameraPicker(
                 isPresented: $isShowingCamera,
-                image: $capturedImage,
-                onCancel: {
-                    isShowingCamera = false
-                    if capturedImage == nil {
-                        onCancel()
-                    }
-                }
+                image: $capturedImage
             )
             .ignoresSafeArea()
         }
+    }
+
+    private var navigationTitle: String {
+        if isShowingEntry {
+            return "Paste Quote"
+        }
+
+        if capturedImage != nil {
+            return "Copy Quote"
+        }
+
+        return ""
     }
 
     private var cameraStartView: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
             
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 Text("Add a quote from a photo")
                     .font(.system(size: 26, weight: .bold))
-                
+
                 Text("Take a picture and highlight the quote you'd like to save, or enter it manually.")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(MotiveTheme.secondaryText)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(6)
             }
             .frame(maxWidth: .infinity, alignment: .center)
             
@@ -81,7 +90,7 @@ struct QuoteCameraScannerView: View {
                 }
 
                 MotiveSecondaryButton(title: "Enter manually", systemImage: "keyboard") {
-                    isShowingEntry = true
+                    showQuoteEntry()
                 }
             }
         }
@@ -90,9 +99,6 @@ struct QuoteCameraScannerView: View {
 
     private func imagePreviewView(_ image: UIImage) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Copy quote text")
-                .font(.system(size: 26, weight: .bold))
-
             LiveTextQuoteImageView(image: image)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: MotiveTheme.radius + 8, style: .continuous))
@@ -109,30 +115,30 @@ struct QuoteCameraScannerView: View {
                 }
 
                 MotivePrimaryButton(title: "Next", systemImage: "arrow.right", placesIconTrailing: true) {
-                    isShowingEntry = true
+                    showQuoteEntry()
                 }
             }
+            .padding(MotiveTheme.pagePadding)
         }
-        .padding(MotiveTheme.pagePadding)
+        .navigationTitle("Copy Quote")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var quoteEntryView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Paste quote")
-                .font(.system(size: 26, weight: .bold))
-
+        VStack(alignment: .leading, spacing: 14) {
             TextEditor(text: $quoteText)
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(MotiveTheme.primaryText)
                 .scrollContentBackground(.hidden)
                 .padding(12)
-                .frame(minHeight: 220)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(MotiveTheme.elevatedSurface)
+                .focused($isQuoteEditorFocused)
+                .clipShape(RoundedRectangle(cornerRadius: MotiveTheme.radius + 8, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MotiveTheme.radius, style: .continuous)
+                    RoundedRectangle(cornerRadius: MotiveTheme.radius + 8, style: .continuous)
                         .stroke(MotiveTheme.border, lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: MotiveTheme.radius, style: .continuous))
 
             HStack(spacing: 10) {
                 MotiveSecondaryButton(title: "Paste", systemImage: "doc.on.clipboard") {
@@ -147,10 +153,19 @@ struct QuoteCameraScannerView: View {
                     saveQuote()
                 }
             }
-
-            Spacer()
+            .padding(MotiveTheme.pagePadding)
         }
-        .padding(MotiveTheme.pagePadding)
+        .onAppear {
+            isQuoteEditorFocused = true
+        }
+    }
+
+    private func showQuoteEntry() {
+        isShowingEntry = true
+        Task { @MainActor in
+            await Task.yield()
+            isQuoteEditorFocused = true
+        }
     }
 
     private func saveQuote() {
@@ -166,7 +181,6 @@ struct QuoteCameraScannerView: View {
 private struct QuoteCameraPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     @Binding var image: UIImage?
-    let onCancel: () -> Void
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
@@ -179,18 +193,16 @@ private struct QuoteCameraPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) { }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(isPresented: $isPresented, image: $image, onCancel: onCancel)
+        Coordinator(isPresented: $isPresented, image: $image)
     }
 
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         @Binding private var isPresented: Bool
         @Binding private var image: UIImage?
-        private let onCancel: () -> Void
 
-        init(isPresented: Binding<Bool>, image: Binding<UIImage?>, onCancel: @escaping () -> Void) {
+        init(isPresented: Binding<Bool>, image: Binding<UIImage?>) {
             _isPresented = isPresented
             _image = image
-            self.onCancel = onCancel
         }
 
         func imagePickerController(
@@ -203,7 +215,6 @@ private struct QuoteCameraPicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             isPresented = false
-            onCancel()
         }
     }
 }
@@ -280,5 +291,15 @@ private final class LiveTextAnalyzerBox {
     let analyzer = ImageAnalyzer()
     let interaction = ImageAnalysisInteraction()
     var imageIdentifier: ObjectIdentifier?
+}
+
+struct QuoteCameraScannerView_Previews: PreviewProvider {
+    static var previews: some View {
+        QuoteCameraScannerView(
+            onCancel: { },
+            onSave: { _ in },
+            onError: { _ in }
+        )
+    }
 }
 #endif

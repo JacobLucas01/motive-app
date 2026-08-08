@@ -29,13 +29,9 @@ struct MotivePrimaryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if !placesIconTrailing {
-                    Image(systemName: systemImage)
-                }
-
                 Text(title)
 
-                if placesIconTrailing {
+                if !systemImage.isEmpty {
                     Image(systemName: systemImage)
                 }
             }
@@ -60,9 +56,9 @@ struct MotiveSecondaryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
+                Text(title)
                 Image(systemName: systemImage)
                     .foregroundStyle(iconColor)
-                Text(title)
             }
             .font(.system(size: 15, weight: .semibold))
             .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)

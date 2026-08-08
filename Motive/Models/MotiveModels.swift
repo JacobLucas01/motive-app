@@ -20,7 +20,6 @@ struct MotiveUser: Identifiable, Equatable, Codable {
 enum StressTopic: String, CaseIterable, Identifiable, Codable {
     case work = "Work"
     case school = "School"
-    case stuck = "Stuck"
     case focus = "Focus"
     case decisions = "Decisions"
     case relationships = "Relationships"
@@ -29,47 +28,73 @@ enum StressTopic: String, CaseIterable, Identifiable, Codable {
     case confidence = "Confidence"
     case discipline = "Discipline"
     case energy = "Energy"
-    case habits = "Habits"
-    case courage = "Courage"
+
+    case anxiety = "Anxiety"
+    case stress = "Stress"
+    case fear = "Fear"
+    case loneliness = "Loneliness"
+    case burnout = "Burnout"
+    case pressure = "Pressure"
+    case rejection = "Rejection"
+    case uncertainty = "Uncertainty"
+    case comparison = "Comparison"
+    case overthinking = "Overthinking"
+
+    case motivation = "Motivation"
+    case consistency = "Consistency"
+    case procrastination = "Procrastination"
+    case ambition = "Ambition"
+    case growth = "Growth"
+    case success = "Success"
+    case resilience = "Resilience"
+    case balance = "Balance"
+
+    case career = "Career"
+    case family = "Family"
+    case dating = "Dating"
+    case fitness = "Fitness"
+    case sleep = "Sleep"
     case purpose = "Purpose"
+    case happiness = "Happiness"
+    case direction = "Direction"
 
     var id: String { rawValue }
+}
 
-    init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer().decode(String.self)
-        switch value {
-        case "Work", "Work stress":
-            self = .work
-        case "School", "School pressure":
-            self = .school
-        case "Stuck", "Feeling stuck":
-            self = .stuck
-        case "Focus", "Low motivation":
-            self = .focus
-        case "Decisions", "Big decision":
-            self = .decisions
-        case "Relationships", "Relationship stress":
-            self = .relationships
-        case "Money", "Money worries":
-            self = .money
-        case "Health", "Health habits":
-            self = .health
-        case "Confidence":
-            self = .confidence
-        case "Discipline":
-            self = .discipline
-        case "Energy":
-            self = .energy
-        case "Habits":
-            self = .habits
-        case "Courage":
-            self = .courage
-        case "Purpose":
-            self = .purpose
-        default:
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown profile signal: \(value)"))
-        }
-    }
+struct StressTopicGroup: Identifiable {
+    let title: String
+    let topics: [StressTopic]
+
+    var id: String { title }
+}
+
+extension StressTopic {
+    static let groupedFocusAreas: [StressTopicGroup] = [
+        StressTopicGroup(
+            title: "Daily life",
+            topics: [.work, .school, .career, .money, .decisions, .direction]
+        ),
+        StressTopicGroup(
+            title: "Mindset",
+            topics: [.focus, .confidence, .discipline, .energy, .motivation, .consistency]
+        ),
+        StressTopicGroup(
+            title: "Stress and emotions",
+            topics: [.anxiety, .stress, .fear, .pressure, .overthinking, .burnout]
+        ),
+        StressTopicGroup(
+            title: "Growth",
+            topics: [.procrastination, .ambition, .growth, .success, .resilience, .purpose]
+        ),
+        StressTopicGroup(
+            title: "Personal",
+            topics: [.relationships, .family, .dating, .health, .fitness, .sleep]
+        ),
+        StressTopicGroup(
+            title: "Self-worth",
+            topics: [.happiness, .balance, .loneliness, .rejection, .comparison, .uncertainty]
+        )
+    ]
 }
 
 struct UserProfile: Equatable, Codable {

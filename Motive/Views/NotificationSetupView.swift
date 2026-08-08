@@ -9,17 +9,16 @@ struct NotificationSetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Set your Pro notification time")
+                Text("Choose when you get notifications")
                     .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(MotiveTheme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Motive Pro sends personalized motivation as push notifications. Choose when you want those quotes to arrive.")
+                Text("Motive sends personalized motivation as push notifications. Choose when you want your quotes to arrive. Premium is required for notifications.")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(MotiveTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
             VStack(spacing: 10) {
                 ForEach(NotificationTiming.allCases) { timing in
                     NotificationTimingRow(
@@ -53,7 +52,7 @@ struct NotificationSetupView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                MotivePrimaryButton(title: "Turn on notifications", systemImage: "bell.badge") {
+                MotivePrimaryButton(title: primaryButtonTitle, systemImage: primaryButtonIcon) {
                     Task {
                         await appState.enableNotificationsAndContinue()
                     }
@@ -68,6 +67,17 @@ struct NotificationSetupView: View {
         }
         .padding(MotiveTheme.pagePadding)
         .motiveScreen()
+        .task {
+            await appState.refreshSystemNotificationState()
+        }
+    }
+
+    private var primaryButtonTitle: String {
+        appState.areSystemNotificationsEnabled ? "Save" : "Enable Notifications"
+    }
+
+    private var primaryButtonIcon: String {
+        appState.areSystemNotificationsEnabled ? "checkmark" : "bell.badge"
     }
 
     private func selectionFeedback() {

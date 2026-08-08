@@ -19,12 +19,20 @@ struct BackendProfileService: ProfileServicing {
         try await apiClient.loadCurrentUser().notificationPreference
     }
 
+    func loadSavedQuotes(for userID: String) async throws -> [SavedQuote]? {
+        try await apiClient.loadCurrentUser().savedQuotes
+    }
+
     func saveProfile(_ profile: UserProfile, for userID: String) async throws {
         try await apiClient.saveProfile(profile)
     }
 
     func saveNotificationPreference(_ preference: NotificationPreference, for userID: String) async throws {
         try await apiClient.saveNotificationPreference(preference)
+    }
+
+    func saveSavedQuotes(_ savedQuotes: [SavedQuote], for userID: String) async throws {
+        try await apiClient.saveSavedQuotes(savedQuotes)
     }
 
     func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws {

@@ -22,6 +22,8 @@ struct MotiveAPIClient {
         self.baseURL = baseURL
         self.tokenProvider = tokenProvider
         self.urlSession = urlSession
+        encoder.dateEncodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .iso8601
     }
 
     func loadCurrentUser() async throws -> BackendCurrentUser {
@@ -36,6 +38,11 @@ struct MotiveAPIClient {
         _ = try await send(path: "/v1/notification-settings", method: "POST", body: preference, responseType: EmptyResponse.self)
     }
 
+    func saveSavedQuotes(_ savedQuotes: [SavedQuote]) async throws {
+        let body = SavedQuotesRequest(savedQuotes: savedQuotes)
+        _ = try await send(path: "/v1/saved-quotes", method: "POST", body: body, responseType: EmptyResponse.self)
+    }
+
     func saveSubscriptionState(_ state: SubscriptionState) async throws {
         let body = SubscriptionStateRequest(state: state.serverValue, hasPremiumAccess: state.hasPremiumAccess)
         _ = try await send(path: "/v1/subscription-state", method: "POST", body: body, responseType: EmptyResponse.self)
@@ -47,7 +54,10 @@ struct MotiveAPIClient {
     }
 
     func generateQuote(for profile: UserProfile, avoiding recentQuotes: [String]) async throws -> MotivationQuote {
-        let body = MotivationQuoteRequest(profile: profile, recentQuotes: recentQuotes)
+        let body = MotivationQuoteRequest(
+            profile: profile.quoteGenerationProfile(),
+            recentQuotes: recentQuotes
+        )
         let response = try await send(path: "/v1/motivation/quote", method: "POST", body: body, responseType: MotivationQuoteResponse.self)
         return MotivationQuote(text: response.quote)
     }
@@ -131,21 +141,23 @@ struct FirebaseAuthTokenProvider: AuthTokenProviding {
 struct BackendCurrentUser: Decodable {
     let profile: UserProfile?
     let notificationPreference: NotificationPreference?
-    let lastGeneratedQuote: BackendLastGeneratedQuote?
-    let lastNotification: BackendLastNotification?
+    let savedQuotes: [SavedQuote]?
+    let latestQuoteRecord: BackendLatestQuote?
 
     var latestQuote: MotivationQuote? {
-        let quote = lastGeneratedQuote?.quote ?? lastNotification?.quote
-        guard let quote, !quote.trimmed.isEmpty else { return nil }
+        guard let quote = latestQuoteRecord?.quote, !quote.trimmed.isEmpty else { return nil }
         return MotivationQuote(text: quote)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case profile
+        case notificationPreference
+        case savedQuotes
+        case latestQuoteRecord = "latestQuote"
     }
 }
 
-struct BackendLastGeneratedQuote: Decodable {
-    let quote: String?
-}
-
-struct BackendLastNotification: Decodable {
+struct BackendLatestQuote: Decodable {
     let quote: String?
 }
 
@@ -166,8 +178,25 @@ struct MotivationQuoteRequest: Encodable {
     let recentQuotes: [String]
 }
 
+struct SavedQuotesRequest: Encodable {
+    let savedQuotes: [SavedQuote]
+}
+
 struct MotivationQuoteResponse: Decodable {
     let quote: String
+}
+
+private extension UserProfile {
+    func quoteGenerationProfile(nameInclusionChance: Double = 0.4) -> UserProfile {
+        guard !preferredName.trimmed.isEmpty,
+              Double.random(in: 0..<1) < nameInclusionChance else {
+            var profile = self
+            profile.preferredName = ""
+            return profile
+        }
+
+        return self
+    }
 }
 
 private extension SubscriptionState {

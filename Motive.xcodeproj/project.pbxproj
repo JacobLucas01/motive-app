@@ -13,6 +13,7 @@
 		57DB7D6830217C4000FF8F98 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 57DB7D6730217C4000FF8F98 /* SwiftUI.framework */; };
 		57DB7D7530217C4200FF8F98 /* MotiveQuoteWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 57DB7D6430217C4000FF8F98 /* MotiveQuoteWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		57DB7DC1302661BA00FF8F98 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 57DB7DC0302661BA00FF8F98 /* StoreKit.framework */; };
+		57DB7DC33026A1A000FF8F98 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 57DB7DC23026A1A000FF8F98 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,6 +91,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57DB7DC1302661BA00FF8F98 /* StoreKit.framework in Frameworks */,
+				57DB7DC33026A1A000FF8F98 /* FirebaseFirestore in Frameworks */,
 				5778A393301FEC5700BF0640 /* FirebaseCore in Frameworks */,
 				57DB7D5B301FF8CC00FF8F98 /* FirebaseAuth in Frameworks */,
 			);
@@ -161,6 +163,7 @@
 			packageProductDependencies = (
 				5778A392301FEC5700BF0640 /* FirebaseCore */,
 				57DB7D5A301FF8CC00FF8F98 /* FirebaseAuth */,
+				57DB7DC23026A1A000FF8F98 /* FirebaseFirestore */,
 			);
 			productName = Motive;
 			productReference = 5778A369301FE47700BF0640 /* Motive.app */;
@@ -592,6 +595,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5778A390301FEB3200BF0640 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		57DB7DC23026A1A000FF8F98 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5778A390301FEB3200BF0640 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

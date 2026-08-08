@@ -13,7 +13,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 32) {
-                header
+                topBar
                 nameSection
                 focusAreasSection
                 problemSection
@@ -51,8 +51,8 @@ struct SettingsView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
+    private var topBar: some View {
+        HStack(spacing: 0) {
             Button {
                 appState.route = .home
             } label: {
@@ -63,14 +63,19 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .foregroundStyle(MotiveTheme.primaryText)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Settings")
-                    .font(.system(size: 28, weight: .bold))
-                Text("Update your profile and timing.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(MotiveTheme.secondaryText)
-            }
+            Spacer()
+
+            Text("Settings")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(MotiveTheme.primaryText)
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 42, height: 42)
         }
+        .frame(height: 42)
+        .padding(.bottom, -8)
     }
 
     private var nameSection: some View {
@@ -102,10 +107,20 @@ struct SettingsView: View {
             Text("Focus areas")
                 .font(.system(size: 18, weight: .bold))
 
-            MotiveFlowLayout(spacing: 10, rowSpacing: 10) {
-                ForEach(StressTopic.allCases) { topic in
-                    MotiveChip(title: topic.rawValue, isSelected: appState.profile.selectedTopics.contains(topic)) {
-                        toggle(topic)
+            VStack(alignment: .leading, spacing: 24) {
+                ForEach(StressTopic.groupedFocusAreas) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(group.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(MotiveTheme.secondaryText)
+
+                        MotiveFlowLayout(spacing: 10, rowSpacing: 10) {
+                            ForEach(group.topics) { topic in
+                                MotiveChip(title: topic.rawValue, isSelected: appState.profile.selectedTopics.contains(topic)) {
+                                    toggle(topic)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -226,7 +241,7 @@ struct SettingsView: View {
 
     private var floatingSaveButton: some View {
         MotivePrimaryButton(
-            title: "Save settings",
+            title: "Save",
             systemImage: "checkmark",
             placesIconTrailing: true
         ) {
@@ -287,9 +302,12 @@ struct SettingsView: View {
             Button(role: .destructive) {
                 isShowingDeleteAlert = true
             } label: {
-                Label("Delete account", systemImage: "trash")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
+                HStack(spacing: 8) {
+                    Text("Delete account")
+                    Image(systemName: "trash")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: MotiveTheme.controlHeight)
             }
             .buttonStyle(.plain)
             .foregroundStyle(MotiveTheme.warning)

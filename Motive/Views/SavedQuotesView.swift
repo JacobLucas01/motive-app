@@ -11,7 +11,7 @@ struct SavedQuotesView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
-                header
+                topBar
 
                 if appState.savedQuotes.isEmpty {
                     emptyState
@@ -37,14 +37,13 @@ struct SavedQuotesView: View {
                 },
                 onError: { message in
                     appState.errorMessage = message
-                    isShowingQuoteScanner = false
                 }
             )
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 14) {
+    private var topBar: some View {
+        HStack(spacing: 0) {
             Button {
                 appState.route = .home
             } label: {
@@ -55,15 +54,13 @@ struct SavedQuotesView: View {
             .buttonStyle(.plain)
             .foregroundStyle(MotiveTheme.primaryText)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saved quotes")
-                    .font(.system(size: 28, weight: .bold))
-                Text("These quotes will reappear in your notifications.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(MotiveTheme.secondaryText)
-            }
+            Spacer()
 
-            Spacer(minLength: 8)
+            Text("Saved quotes")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(MotiveTheme.primaryText)
+
+            Spacer()
 
             Button {
                 isShowingQuoteScanner = true
@@ -75,13 +72,15 @@ struct SavedQuotesView: View {
             .buttonStyle(.plain)
             .foregroundStyle(MotiveTheme.primaryText)
         }
+        .frame(height: 42)
+        .padding(.bottom, -8)
     }
-
+    
     private var emptyState: some View {
         HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("No saved quotes yet")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
 
                 Text("Tap the bookmark or scan a quote. Saved quotes can show up in your notifications.")
                     .font(.system(size: 14, weight: .medium))
@@ -91,9 +90,9 @@ struct SavedQuotesView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "bookmark")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(MotiveTheme.accent)
-                .frame(width: 25, height: 25)
+                .frame(width: 22, height: 22)
         }
         .frame(maxWidth: .infinity)
         .padding(24)

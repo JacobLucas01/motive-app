@@ -20,8 +20,10 @@ protocol AuthServicing {
 protocol ProfileServicing {
     func loadProfile(for userID: String) async throws -> UserProfile?
     func loadNotificationPreference(for userID: String) async throws -> NotificationPreference?
+    func loadSavedQuotes(for userID: String) async throws -> [SavedQuote]?
     func saveProfile(_ profile: UserProfile, for userID: String) async throws
     func saveNotificationPreference(_ preference: NotificationPreference, for userID: String) async throws
+    func saveSavedQuotes(_ savedQuotes: [SavedQuote], for userID: String) async throws
     func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws
     func deleteAccountData(for userID: String) async throws
 }
@@ -181,6 +183,7 @@ struct MockAuthService: AuthServicing {
 actor InMemoryProfileService: ProfileServicing {
     private var profiles: [String: UserProfile] = [:]
     private var notificationPreferences: [String: NotificationPreference] = [:]
+    private var savedQuotes: [String: [SavedQuote]] = [:]
 
     func loadProfile(for userID: String) async throws -> UserProfile? {
         profiles[userID]
@@ -194,8 +197,16 @@ actor InMemoryProfileService: ProfileServicing {
         profiles[userID] = profile
     }
 
+    func loadSavedQuotes(for userID: String) async throws -> [SavedQuote]? {
+        savedQuotes[userID]
+    }
+
     func saveNotificationPreference(_ preference: NotificationPreference, for userID: String) async throws {
         notificationPreferences[userID] = preference
+    }
+
+    func saveSavedQuotes(_ quotes: [SavedQuote], for userID: String) async throws {
+        savedQuotes[userID] = quotes
     }
 
     func saveSubscriptionState(_ state: SubscriptionState, for userID: String) async throws { }
@@ -203,6 +214,7 @@ actor InMemoryProfileService: ProfileServicing {
     func deleteAccountData(for userID: String) async throws {
         profiles[userID] = nil
         notificationPreferences[userID] = nil
+        savedQuotes[userID] = nil
     }
 }
 

@@ -68,9 +68,7 @@ struct ContentView: View {
         guard navigationPath.isEmpty else { return rootRoute }
 
         switch appState.route {
-        case .home:
-            return .home
-        case .settings, .savedQuotes:
+        case .home, .settings, .savedQuotes:
             return .home
         default:
             return rootRoute
@@ -107,9 +105,7 @@ struct ContentView: View {
             rootRoute = .home
             navigationPath = []
         case .settings, .savedQuotes:
-            if rootRoute != .home {
-                rootRoute = .home
-            }
+            rootRoute = .home
             navigationPath = [route]
         }
     }
@@ -149,6 +145,7 @@ struct ContentView: View {
         }
     }
 }
+
 
 private struct LoadingOverlay: View {
     var body: some View {

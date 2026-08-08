@@ -36,6 +36,18 @@ enum MotiveWidgetQuoteStore {
         reloadWidgets()
     }
 
+    static func clear() {
+        clear(from: .standard)
+
+        if let sharedDefaults {
+            clear(from: sharedDefaults)
+            sharedDefaults.synchronize()
+        }
+
+        UserDefaults.standard.synchronize()
+        reloadWidgets()
+    }
+
     static func reloadWidgets() {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
@@ -57,5 +69,10 @@ enum MotiveWidgetQuoteStore {
     private static func write(_ quote: String, to defaults: UserDefaults) {
         defaults.set(quote, forKey: quoteKey)
         defaults.set(Date(), forKey: updatedAtKey)
+    }
+
+    private static func clear(from defaults: UserDefaults) {
+        defaults.removeObject(forKey: quoteKey)
+        defaults.removeObject(forKey: updatedAtKey)
     }
 }

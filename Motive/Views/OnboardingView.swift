@@ -14,27 +14,37 @@ struct OnboardingView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("What should Motive understand?")
+                    Text("What should motivate you?")
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(MotiveTheme.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Choose a few themes or write your own context. These become profile signals for future quotes.")
+                    Text("Choose a few topics or add your own context. Your quotes will be personalized around what you select.")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(MotiveTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
-                    ForEach(StressTopic.allCases) { topic in
-                        MotiveChip(title: topic.rawValue, isSelected: appState.profile.selectedTopics.contains(topic)) {
-                            toggle(topic, in: &appState.profile)
+                VStack(alignment: .leading, spacing: 28) {
+                    ForEach(StressTopic.groupedFocusAreas) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(group.title)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MotiveTheme.secondaryText)
+
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                                ForEach(group.topics) { topic in
+                                    MotiveChip(title: topic.rawValue, isSelected: appState.profile.selectedTopics.contains(topic)) {
+                                        toggle(topic, in: &appState.profile)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Biggest problem")
+                    Text("What's on your mind?")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(MotiveTheme.secondaryText)
 
@@ -42,30 +52,7 @@ struct OnboardingView: View {
                         Text("Example: I keep putting off important work")
                             .foregroundStyle(MotiveTheme.secondaryText)
                     }
-                    .lineLimit(2...4)
-                    .motiveField()
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Anything else")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(MotiveTheme.secondaryText)
-
-                    ZStack(alignment: .topLeading) {
-                        if appState.profile.customContext.trimmed.isEmpty {
-                            Text("Add details that should shape future quotes")
-                                .foregroundStyle(MotiveTheme.secondaryText)
-                                .padding(.top, 22)
-                                .padding(.horizontal, 18)
-                        }
-
-                        TextEditor(text: $appState.profile.customContext)
-                            .foregroundStyle(MotiveTheme.primaryText)
-                            .foregroundColor(MotiveTheme.primaryText)
-                            .tint(MotiveTheme.accent)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 120)
-                    }
+                    .lineLimit(2...8)
                     .motiveField()
                 }
 

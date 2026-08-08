@@ -9,6 +9,7 @@ import FirebaseFirestore
 @MainActor
 final class MotiveAppState: ObservableObject {
     private static let defaultQuoteText = "Your first quote is being prepared."
+    private static let connectionErrorMessage = "Can't connect. Check your internet connection and try again."
 
     private let services: AppServices
     private let profileCache = UserDefaultsProfileCache()
@@ -20,9 +21,12 @@ final class MotiveAppState: ObservableObject {
     @Published var subscriptionState: SubscriptionState = .unknown
     @Published var premiumOffer = PremiumSubscriptionOffer.fallback
     @Published var savedQuotes: [SavedQuote] = []
+    @Published var areSystemNotificationsEnabled = false
     @Published var currentQuote = MotivationQuote(text: MotiveAppState.defaultQuoteText) {
         didSet {
-            MotiveWidgetQuoteStore.save(currentQuote)
+            if currentQuote.text.trimmed != Self.defaultQuoteText {
+                MotiveWidgetQuoteStore.save(currentQuote)
+            }
         }
     }
     @Published var isWorking = false
@@ -45,10 +49,6 @@ final class MotiveAppState: ObservableObject {
     init(services: AppServices) {
         self.services = services
         restoreCachedSessionIfPossible()
-        if let savedQuote = MotiveWidgetQuoteStore.latestSavedQuoteText {
-            currentQuote = MotivationQuote(text: savedQuote)
-        }
-        repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: 5)
         MotiveWidgetQuoteStore.reloadWidgets()
         observeAPNsRegistration()
     }
@@ -72,6 +72,9 @@ final class MotiveAppState: ObservableObject {
 
                 if let error {
                     print("❌ Latest quote listener error:", error)
+                    Task { @MainActor in
+                        self.errorMessage = Self.connectionErrorMessage
+                    }
                     return
                 }
 
@@ -85,8 +88,8 @@ final class MotiveAppState: ObservableObject {
                 }
 
                 Task { @MainActor in
-                    print("🔥 FIREBASE NEW QUOTE:", quoteText)
-                    self.applyDeliveredQuoteText(quoteText)
+                    print("🔥 FIREBASE LATEST QUOTE:", quoteText)
+                    self.applyLatestFirestoreQuoteText(quoteText)
                 }
             }
     }
@@ -100,7 +103,7 @@ final class MotiveAppState: ObservableObject {
         do {
             try await loadSession(for: restoredUser)
         } catch {
-            // Launch refresh is best-effort. Keep the cached session visible if the network is unavailable.
+            errorMessage = Self.connectionErrorMessage
         }
     }
 
@@ -147,7 +150,7 @@ final class MotiveAppState: ObservableObject {
             profileCache.saveLastUser(user)
             profileCache.save(profile: profile, notificationPreference: notificationPreference, for: user.id)
             try await services.profile.saveProfile(profile, for: user.id)
-            try await generateInitialQuoteIfNeeded(for: user)
+            try await requestFreshQuoteForNewAccount(for: user)
             try await uploadLatestAPNsTokenIfPossible()
             route = subscriptionState.hasPremiumAccess ? .notifications : .paywall
         }
@@ -172,12 +175,10 @@ final class MotiveAppState: ObservableObject {
 
             let updatedSettings = await notificationSettings(for: center)
 
-            let notificationsAllowed =
-                updatedSettings.authorizationStatus == .authorized ||
-                updatedSettings.authorizationStatus == .provisional ||
-                updatedSettings.authorizationStatus == .ephemeral
+            let notificationsAllowed = notificationsAllowed(for: updatedSettings)
 
             // Saving a notification time means notifications should be ON.
+            areSystemNotificationsEnabled = notificationsAllowed
             notificationPreference.isEnabled = notificationsAllowed
             notificationPreference.timezoneIdentifier = TimeZone.current.identifier
 
@@ -215,6 +216,11 @@ final class MotiveAppState: ObservableObject {
         }
     }
 
+    func refreshSystemNotificationState() async {
+        let settings = await notificationSettings(for: UNUserNotificationCenter.current())
+        areSystemNotificationsEnabled = notificationsAllowed(for: settings)
+    }
+
     func enableNotificationsAndContinue() async {
         guard let user else { return }
         guard subscriptionState.hasPremiumAccess else {
@@ -228,6 +234,7 @@ final class MotiveAppState: ObservableObject {
 
         await runTask {
             let granted = try await services.notifications.requestAuthorization()
+            areSystemNotificationsEnabled = granted
             notificationPreference.isEnabled = granted
             try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
             if granted {
@@ -284,12 +291,8 @@ final class MotiveAppState: ObservableObject {
                 try await services.profile.saveSubscriptionState(subscriptionState, for: user.id)
                 try await services.profile.saveNotificationPreference(notificationPreference, for: user.id)
                 try await syncSavedQuoteNotifications()
-                try await generateInitialQuoteIfNeeded(for: user)
             }
             try await loadDeliveredQuote()
-            if let user {
-                try await generateInitialQuoteIfNeeded(for: user)
-            }
             route = .home
         }
     }
@@ -316,8 +319,7 @@ final class MotiveAppState: ObservableObject {
                 await services.notifications.registerForRemoteNotifications()
             }
             try await uploadLatestAPNsTokenIfPossible()
-            let pushedQuote = try await services.notifications.sendTestPush()
-            currentQuote = pushedQuote
+            _ = try await services.notifications.sendTestPush()
         }
     }
 
@@ -336,13 +338,8 @@ final class MotiveAppState: ObservableObject {
         }
 
         await runTask {
-            if repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: 4) {
-                return
-            }
-
             let recentQuotes = boundedRecentQuotes(for: user.id)
             let quote = try await services.motivation.generateQuote(for: profile, avoiding: recentQuotes)
-            currentQuote = quote
             profileCache.incrementDailyNewQuoteCount(for: user.id)
             rememberRecentQuote(quote.text, for: user.id)
         }
@@ -357,8 +354,7 @@ final class MotiveAppState: ObservableObject {
     }
 
     func saveScannedQuote(_ quoteText: String) {
-        let didSaveQuote = saveQuoteText(quoteText)
-        noticeMessage = didSaveQuote ? "Scanned quote saved." : "That quote is already saved."
+        _ = saveQuoteText(quoteText)
     }
 
     @discardableResult
@@ -368,16 +364,15 @@ final class MotiveAppState: ObservableObject {
         guard !cleanQuote.isEmpty else { return false }
 
         if let existingIndex = savedQuotes.firstIndex(where: { $0.text == cleanQuote }) {
-            let existingQuote = savedQuotes.remove(at: existingIndex)
+            var existingQuote = savedQuotes.remove(at: existingIndex)
+            existingQuote.savedAt = .now
             savedQuotes.insert(existingQuote, at: 0)
-            profileCache.save(savedQuotes: savedQuotes, for: user.id)
-            rescheduleSavedQuoteNotificationsSoon()
+            persistSavedQuotes(savedQuotes, for: user)
             return false
         }
 
         savedQuotes.insert(SavedQuote(text: cleanQuote), at: 0)
-        profileCache.save(savedQuotes: savedQuotes, for: user.id)
-        rescheduleSavedQuoteNotificationsSoon()
+        persistSavedQuotes(savedQuotes, for: user)
         return true
     }
 
@@ -392,15 +387,13 @@ final class MotiveAppState: ObservableObject {
             savedQuotes.insert(SavedQuote(text: quoteText), at: 0)
         }
 
-        profileCache.save(savedQuotes: savedQuotes, for: user.id)
-        rescheduleSavedQuoteNotificationsSoon()
+        persistSavedQuotes(savedQuotes, for: user)
     }
 
     func removeSavedQuote(_ quote: SavedQuote) {
         guard let user else { return }
         savedQuotes.removeAll { $0.id == quote.id }
-        profileCache.save(savedQuotes: savedQuotes, for: user.id)
-        rescheduleSavedQuoteNotificationsSoon()
+        persistSavedQuotes(savedQuotes, for: user)
     }
 
     func uploadLatestAPNsTokenIfPossible() async throws {
@@ -411,21 +404,30 @@ final class MotiveAppState: ObservableObject {
     func deleteAccount() async {
         guard let user else { return }
         await runTask {
-            profileCache.clearLastUser()
-            profileCache.clear(for: user.id)
             try await services.profile.deleteAccountData(for: user.id)
+            await clearLocalUserData(for: user.id)
             await services.auth.signOut()
             resetSession()
         }
     }
 
     func signOut() async {
-        profileCache.clearLastUser()
         if let user {
-            profileCache.clear(for: user.id)
+            await clearLocalUserData(for: user.id)
+        } else {
+            profileCache.clearLastUser()
+            MotiveWidgetQuoteStore.clear()
         }
         await services.auth.signOut()
         resetSession()
+    }
+
+    private func clearLocalUserData(for userID: String) async {
+        profileCache.clearLastUser()
+        profileCache.clear(for: userID)
+        APNsDeviceTokenCenter.latestToken = nil
+        MotiveWidgetQuoteStore.clear()
+        await clearSavedQuoteNotifications()
     }
 
     private func resetSession() {
@@ -433,6 +435,7 @@ final class MotiveAppState: ObservableObject {
         profile = UserProfile()
         notificationPreference = NotificationPreference()
         savedQuotes = []
+        currentQuote = MotivationQuote(text: Self.defaultQuoteText)
         subscriptionState = .unknown
         route = .signIn
         latestQuoteListener?.remove()
@@ -450,12 +453,15 @@ final class MotiveAppState: ObservableObject {
         }
         savedQuotes = profileCache.loadSavedQuotes(for: cachedUser.id)
         rescheduleSavedQuoteNotificationsSoon()
-        repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: 5)
 
         route = profile.isComplete ? .home : .onboarding
     }
 
     private func loadSession(for signedInUser: MotiveUser) async throws {
+        if user?.id != signedInUser.id {
+            currentQuote = MotivationQuote(text: Self.defaultQuoteText)
+        }
+
         user = signedInUser
         await refreshSubscriptionState()
         startListeningForLatestQuote(for: signedInUser)
@@ -465,18 +471,23 @@ final class MotiveAppState: ObservableObject {
             profile = cached.profile
             notificationPreference = cached.notificationPreference
         }
-        savedQuotes = profileCache.loadSavedQuotes(for: signedInUser.id)
+        let cachedSavedQuotes = profileCache.loadSavedQuotes(for: signedInUser.id)
+        savedQuotes = cachedSavedQuotes
+        if let serverSavedQuotes = try await services.profile.loadSavedQuotes(for: signedInUser.id) {
+            savedQuotes = normalizedSavedQuotes(serverSavedQuotes)
+            profileCache.save(savedQuotes: savedQuotes, for: signedInUser.id)
+        } else if !cachedSavedQuotes.isEmpty {
+            try await services.profile.saveSavedQuotes(cachedSavedQuotes, for: signedInUser.id)
+        }
         if let savedPreference = try await services.profile.loadNotificationPreference(for: signedInUser.id) {
             notificationPreference = savedPreference
         }
         try await enforcePremiumNotificationAccess(for: signedInUser)
         try await syncSavedQuoteNotifications()
-        repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: 5)
         if let savedProfile = try await services.profile.loadProfile(for: signedInUser.id) {
             profile = mergedProfile(serverProfile: savedProfile, cachedProfile: cached?.profile)
             profileCache.save(profile: profile, notificationPreference: notificationPreference, for: signedInUser.id)
             try await loadDeliveredQuote()
-            try await generateInitialQuoteIfNeeded(for: signedInUser)
             try await uploadLatestAPNsTokenIfPossible()
             route = .home
         } else {
@@ -530,6 +541,11 @@ final class MotiveAppState: ObservableObject {
         return merged
     }
 
+    private func requestFreshQuoteForNewAccount(for user: MotiveUser) async throws {
+        let quote = try await services.motivation.generateQuote(for: profile, avoiding: [])
+        rememberRecentQuote(quote.text, for: user.id)
+    }
+
     private func boundedRecentQuotes(for userID: String) -> [String] {
         profileCache.loadRecentGeneratedQuotes(for: userID)
             .map { String($0.trimmed.prefix(recentQuoteCharacterLimit)) }
@@ -548,18 +564,50 @@ final class MotiveAppState: ObservableObject {
         profileCache.saveRecentGeneratedQuotes(Array(recentQuotes.prefix(recentQuoteMemoryLimit)), for: userID)
     }
 
-    @discardableResult
-    private func repeatSavedQuoteInMainQuoteIfAvailable(chanceDivisor: Int) -> Bool {
-        guard !savedQuotes.isEmpty, Int.random(in: 0..<max(chanceDivisor, 1)) == 0 else { return false }
-        let quote = savedQuotes.randomElement() ?? savedQuotes[0]
-        currentQuote = MotivationQuote(text: quote.text)
-        return true
+    private func persistSavedQuotes(_ quotes: [SavedQuote], for user: MotiveUser) {
+        let normalizedQuotes = normalizedSavedQuotes(quotes)
+        savedQuotes = normalizedQuotes
+        profileCache.save(savedQuotes: normalizedQuotes, for: user.id)
+        Task { @MainActor in
+            do {
+                try await services.profile.saveSavedQuotes(normalizedQuotes, for: user.id)
+                try await syncSavedQuoteNotifications()
+            } catch {
+                errorMessage = Self.connectionErrorMessage
+            }
+        }
+    }
+
+    private func normalizedSavedQuotes(_ quotes: [SavedQuote]) -> [SavedQuote] {
+        var seenTexts: Set<String> = []
+        return quotes
+            .filter { !$0.text.trimmed.isEmpty }
+            .sorted { $0.savedAt > $1.savedAt }
+            .filter { quote in
+                let normalizedText = quote.text.trimmed.lowercased()
+                guard !seenTexts.contains(normalizedText) else { return false }
+                seenTexts.insert(normalizedText)
+                return true
+            }
     }
 
     private func rescheduleSavedQuoteNotificationsSoon() {
         Task { @MainActor in
             try? await syncSavedQuoteNotifications()
         }
+    }
+
+    private func clearSavedQuoteNotifications() async {
+        let center = UNUserNotificationCenter.current()
+        let pendingIdentifiers = await pendingNotificationRequests(for: center)
+            .map(\.identifier)
+            .filter { $0.hasPrefix(savedQuoteNotificationPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: pendingIdentifiers)
+
+        let deliveredIdentifiers = await deliveredNotifications(for: center)
+            .map { $0.request.identifier }
+            .filter { $0.hasPrefix(savedQuoteNotificationPrefix) }
+        center.removeDeliveredNotifications(withIdentifiers: deliveredIdentifiers)
     }
 
     private func syncSavedQuoteNotifications() async throws {
@@ -636,6 +684,14 @@ final class MotiveAppState: ObservableObject {
         }
     }
 
+    private func deliveredNotifications(for center: UNUserNotificationCenter) async -> [UNNotification] {
+        await withCheckedContinuation { continuation in
+            center.getDeliveredNotifications { notifications in
+                continuation.resume(returning: notifications)
+            }
+        }
+    }
+
     private func notificationSettings(for center: UNUserNotificationCenter) async -> UNNotificationSettings {
         await withCheckedContinuation { continuation in
             center.getNotificationSettings { settings in
@@ -644,19 +700,10 @@ final class MotiveAppState: ObservableObject {
         }
     }
 
-    private func generateInitialQuoteIfNeeded(for user: MotiveUser) async throws {
-        guard shouldGenerateInitialQuote else { return }
-        let recentQuotes = boundedRecentQuotes(for: user.id)
-        let quote = try await services.motivation.generateQuote(for: profile, avoiding: recentQuotes)
-        currentQuote = quote
-        rememberRecentQuote(quote.text, for: user.id)
-    }
-
-    private var shouldGenerateInitialQuote: Bool {
-        let quoteText = currentQuote.text.trimmed
-        return quoteText.isEmpty
-            || quoteText == Self.defaultQuoteText
-            || quoteText == "Your next quote will appear here after a notification."
+    private func notificationsAllowed(for settings: UNNotificationSettings) -> Bool {
+        settings.authorizationStatus == .authorized
+            || settings.authorizationStatus == .provisional
+            || settings.authorizationStatus == .ephemeral
     }
 
     private func observeAPNsRegistration() {
@@ -683,25 +730,10 @@ final class MotiveAppState: ObservableObject {
             }
         }
 
-        let quoteObserver = NotificationCenter.default.addObserver(
-            forName: APNsDeviceTokenCenter.didReceiveMotivationQuote,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let quote = notification.userInfo?["quote"] as? String else {
-                return
-            }
-
-            Task { @MainActor in
-                self.applyDeliveredQuoteText(quote)
-            }
-        }
-
-        notificationObservers = [tokenObserver, failureObserver, quoteObserver]
+        notificationObservers = [tokenObserver, failureObserver]
     }
 
-    private func applyDeliveredQuoteText(_ quoteText: String) {
+    private func applyLatestFirestoreQuoteText(_ quoteText: String) {
         let quote = quoteText.trimmed
         guard !quote.isEmpty, currentQuote.text != quote else { return }
         currentQuote = MotivationQuote(text: quote)
@@ -718,8 +750,16 @@ final class MotiveAppState: ObservableObject {
         do {
             try await operation()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = message(for: error)
         }
+    }
+
+    private func message(for error: Error) -> String {
+        if error is URLError {
+            return Self.connectionErrorMessage
+        }
+
+        return error.localizedDescription
     }
 
     private func signInWithAppleMessage(for error: Error) -> String {
@@ -824,6 +864,10 @@ private struct UserDefaultsProfileCache {
         defaults.removeObject(forKey: nameKey(for: userID))
         defaults.removeObject(forKey: savedQuotesKey(for: userID))
         defaults.removeObject(forKey: recentGeneratedQuotesKey(for: userID))
+
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(dailyNewQuoteCountKeyPrefix(for: userID)) {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private var lastUserKey: String {
@@ -847,7 +891,11 @@ private struct UserDefaultsProfileCache {
     }
 
     private func dailyNewQuoteCountKey(for userID: String) -> String {
-        "motive.dailyNewQuoteCount.\(userID).\(dayStamp)"
+        "\(dailyNewQuoteCountKeyPrefix(for: userID))\(dayStamp)"
+    }
+
+    private func dailyNewQuoteCountKeyPrefix(for userID: String) -> String {
+        "motive.dailyNewQuoteCount.\(userID)."
     }
 
     private var dayStamp: String {
