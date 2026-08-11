@@ -71,10 +71,7 @@ final class MotiveAppState: ObservableObject {
                 guard let self else { return }
 
                 if let error {
-                    print("❌ Latest quote listener error:", error)
-                    Task { @MainActor in
-                        self.errorMessage = Self.connectionErrorMessage
-                    }
+                    print("Latest quote listener reconnecting after error:", error)
                     return
                 }
 
@@ -212,7 +209,7 @@ final class MotiveAppState: ObservableObject {
         do {
             try await persistSettings(for: user)
         } catch {
-            errorMessage = error.localizedDescription
+            print("Background settings sync failed:", error)
         }
     }
 
@@ -726,6 +723,11 @@ final class MotiveAppState: ObservableObject {
         ) { [weak self] notification in
             guard let self, let error = notification.userInfo?["error"] as? Error else { return }
             Task { @MainActor in
+                if self.isTransientNetworkInterruption(error) {
+                    print("Remote notification registration will retry after transient error:", error)
+                    return
+                }
+
                 self.errorMessage = error.localizedDescription
             }
         }
@@ -760,6 +762,18 @@ final class MotiveAppState: ObservableObject {
         }
 
         return error.localizedDescription
+    }
+
+    private func isTransientNetworkInterruption(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return false }
+
+        switch URLError.Code(rawValue: nsError.code) {
+        case .networkConnectionLost, .notConnectedToInternet, .timedOut:
+            return true
+        default:
+            return false
+        }
     }
 
     private func signInWithAppleMessage(for error: Error) -> String {
